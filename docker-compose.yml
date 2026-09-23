@@ -1,0 +1,74 @@
+version: '3'
+
+services:
+    nginx:
+        image: nginx:latest
+        volumes:
+            - ./:/var/www
+            - ./_docker/nginx/conf.d:/etc/nginx/conf.d
+        ports:
+            - "8000:80"
+        depends_on:
+            - app
+            - tusd
+        container_name: gg_nginx
+
+    tusd:
+        image: tusproject/tusd:v2.8.0
+        container_name: gg_tusd
+        volumes:
+            - ./_docker/tusd/run.sh:/usr/local/bin/run-tusd.sh:ro
+        environment:
+            TUSD_HOST: "0.0.0.0"
+            TUSD_PORT: "8080"
+            TUSD_BIN: "/usr/local/bin/tusd"
+            TUSD_HOOKS_SECRET: ${TUSD_HOOKS_SECRET:-local-tusd-hooks-secret}
+            TUSD_HOOKS_URL: http://hooks:${TUSD_HOOKS_SECRET:-local-tusd-hooks-secret}@nginx/internal/tus-hooks
+            AWS_ACCESS_KEY_ID: ${DO_SPACES_KEY}
+            AWS_SECRET_ACCESS_KEY: ${DO_SPACES_SECRET}
+            AWS_REGION: us-east-1
+            DO_SPACES_BUCKET: ${DO_SPACES_BUCKET}
+            DO_SPACES_ENDPOINT: ${DO_SPACES_ENDPOINT}
+        entrypoint: ["/bin/sh", "/usr/local/bin/run-tusd.sh"]
+        restart: unless-stopped
+
+    app:
+        build:
+            context: .
+            dockerfile: _docker/app/Dockerfile
+        volumes:
+            - ./:/var/www
+        depends_on:
+            - postgres
+        container_name: gg_app
+
+    postgres:
+        image: postgres:latest
+        restart: always
+        ports:
+            - "10007:5432"
+        environment:
+            POSTGRES_PASSWORD: secret
+            POSTGRES_USER: default
+            POSTGRES_DB: default
+        volumes:
+            - postgres_data:/var/lib/postgresql
+    postgres_test:
+        image: postgres:latest
+        restart: always
+        ports:
+            - "10008:5432"
+        environment:
+            POSTGRES_PASSWORD: secret
+            POSTGRES_USER: test_user
+            POSTGRES_DB: test_db
+    redis:
+        image: redis:latest
+        restart: always
+        volumes:
+            - ./storage/redis/data:/data
+        ports:
+            - "10004:6379"
+
+volumes:
+    postgres_data:
