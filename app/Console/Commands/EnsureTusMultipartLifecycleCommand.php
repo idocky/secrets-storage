@@ -29,7 +29,7 @@ class EnsureTusMultipartLifecycleCommand extends Command
         $days = max(1, (int) config('tus.lifecycle_days'));
         $ruleId = 'abort-incomplete-tus-multipart';
 
-        $client = new S3Client([
+        $clientConfig = [
             'version' => 'latest',
             'region' => $disk['region'] ?: 'us-east-1',
             'endpoint' => $disk['endpoint'] ?? null,
@@ -38,7 +38,14 @@ class EnsureTusMultipartLifecycleCommand extends Command
                 'key' => $key,
                 'secret' => $secret,
             ],
-        ]);
+        ];
+
+        if (str_contains((string) ($disk['endpoint'] ?? ''), 'r2.cloudflarestorage.com')) {
+            $clientConfig['request_checksum_calculation'] = 'when_required';
+            $clientConfig['response_checksum_validation'] = 'when_required';
+        }
+
+        $client = new S3Client($clientConfig);
 
         try {
             $rules = [];
